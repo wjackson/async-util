@@ -1,4 +1,5 @@
 package Async::Util;
+# ABSTRACT: utilities for doing common async operations
 use strict;
 use warnings;
 use Carp;
