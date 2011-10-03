@@ -7,14 +7,17 @@ use Exporter;
 use Scalar::Util qw(weaken);
 
 our @ISA               = qw(Exporter);
-our @EXPORT_OK         = qw(apply apply_ignore apply_each chain);
+our @EXPORT_OK         = qw(apply each chain);
 my  $DEFAULT_AT_A_TIME = 100;
 
-#
-# Applies the provided coderef to a list of inputs one at a time.  Upon
-# completion $cb is passed a list of outputs.
-#
 sub apply {
+    my (%args) = @_;
+
+    return _apply_ignore(%args) if exists $args{output} && !$args{output};
+    return _apply(%args);
+}
+
+sub _apply {
     my (%args) = @_;
 
     my $action    = $args{action};
@@ -48,8 +51,9 @@ sub apply {
             $input_index++;
 
             my $after_work_wrapper = sub {
+                my ($res, $err) = @_;
                 my $i = $index;
-                $after_work->(@_, $i);
+                $after_work->($res, $err, $i);
             };
 
             $action->($input, $after_work_wrapper);
@@ -85,14 +89,7 @@ sub apply {
     return;
 }
 
-#
-# apply_ignore
-#
-# Like a apply except that any output passed to the action's callback is
-# ignored.  It isn't tracked and it isn't passed to $cb.  For this reason
-# apply_ignore() is faster than apply();
-#
-sub apply_ignore {
+sub _apply_ignore {
     my (%args) = @_;
 
     my $action    = $args{action};
@@ -151,10 +148,7 @@ sub apply_ignore {
     return;
 }
 
-#
-# apply_each
-#
-sub apply_each {
+sub each {
     my (%args) = @_;
 
     my $actions   = $args{actions};
@@ -257,3 +251,175 @@ sub chain {
 }
 
 1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+Async::Util - Utilities for common asynchronous programming tasks.
+
+=head1 SYNOPSIS
+
+    use Async::Util qw(apply chain);
+
+    # async map
+    apply(
+        inputs => [ 'foo', 'bar' ],
+        action => \&something_asynchrounous,
+        cb     => \&do_this_at_the_end,
+    );
+
+    # invoke action on the corresponding input
+    each(
+        inputs  => [ 1, 1, 1 ],
+        actions => [
+            ... # asynchronous subs
+        ],
+        cb     => \&do_this_at_the_end,
+    );
+
+    # execute steps in order
+    chain(
+        input => 2,
+        steps => [
+            ... # asynchronous subs
+        ],
+        cb    => \&do_this_at_the_end,
+    );
+
+Examples using AnyEvent:
+
+    use AnyEvent;
+    use Async::Util qw(apply);
+
+    my @timers;
+    my $delayed_double = sub {
+        my ($input, $cb) = @_;
+
+        push @times, AnyEvent->timer(after => 2, cb => sub {
+            $cb->($input*2);
+        });
+    };
+
+    my $cv = AE::cv;
+
+    apply(
+        inputs    => [ 1 .. 20 ],
+        action    => $delayed_double,
+        cb        => sub { $cv->send(@_) },
+        at_a_time => 5,
+    );
+
+    my ($res, $err) = $cv->recv;
+
+    # chain
+    my $cv = AE::cv;
+
+    chain(
+        input => 2,
+        steps => [
+            sub {
+                my ($input, $cb) = @_;
+                push @timers, AnyEvent->timer(
+                    after => 0,
+                    cb    => sub { $cb->($input+1) },
+                );
+            },
+            sub {
+                my ($input, $cb) = @_;
+                push @timers, AnyEvent->timer(
+                    after => 0,
+                    cb    => sub { $cb->($input * 2) },
+                );
+            },
+        ],
+        cb => sub { $cv->send(@_) },
+    );
+
+    my ($res, $err) = $cv->recv; # $res is 6
+
+=head1 DESCRIPTION
+
+C<Async::Util> provides functionality for common tasks that come up when doing
+asynchronous programming.  This module's functions often take code refs.
+Those code refs will be invoked with two arguments: the input and a callback
+that should be invoked on completion.  When the provided callback is invoked
+it should be passed an output argument and an optional error message.
+
+=head1 FUNCTIONS
+
+=head2 apply
+
+C<apply> is an asynchronous version of map:
+
+    apply(
+        inputs    => <ARRAY_REF>,
+        action    => <CODE_REF>,
+        cb        => <CODE_REF>,
+        at_a_time => <INTEGER>, # defaults to 100
+        output    => <BOOL>,    # defaults to true
+    );
+
+The action coderef is executed for every provided input.  The first argument
+to the action coderef is an input from the list and the second is a callback.
+When the action is done it should invoke the callback passing the result as
+the first argument and optionally an error message as the second.
+
+If the action will produce no output then it can pass C<undef> as the first
+argument to the callback and an optional error as the second argument in the
+usual way.  In this case the C<apply> argument C<output> can be set to 0,
+allowing certain performance optimizations to occur.
+
+The C<at_a_time> argument sets the maximum number of inputs that will be
+processed simultaneiously.  This defaults to 100.
+
+When the action has been applied to each input then C<cb> coderef is invoked
+and passed an arrayref containing one result for every input.  If action ever
+passes an error to its callback then the cb coderef is immediatly invoked and
+passed the error.  No more inputs are processed.
+
+=head2 each
+
+C<each> executes a list of callbacks on a list of corresponding inputs.  Every
+provided action in the list of provided actions is executed and passed the
+input found in the same possition in the list of provided inputs.
+
+    each(
+        inputs    => <ARRAY_REF>,
+        actions   => <CODE_REF>,
+        cb        => <CODE_REF>,
+        at_a_time => <INTEGER>, # defaults to 100
+        output    => <BOOL>,    # defaults to true
+    );
+
+Just as with C<apply>, actions should pass a result to the passed in callback
+as well as an optional error.  Also, as with C<apply>, the C<cb> coderef is
+invoked once all the inputs have been processed or immediatly if any action
+passes an error to its callback.
+
+=head2 chain
+
+C<chain> executes the provided steps in order.  Each step coderef is passed an
+input and a callback.  When the step is complete is should invoke the coderef
+and pass a result and an optional error.  The result from each step becomes
+the input to the next step.  The first step's input is the value passed to
+C<chain> as the C<input> argument.  When all steps are complete the C<cb>
+coderef is executed and passed the result from the last step.  If any step
+returns an error then the C<cb> coderef is immediately invoked and passed the
+error.
+
+    chain(
+        inputs    => <ARRAY_REF>,
+        steps     => <ARRAY_REF>,
+        cb        => <CODE_REF>,
+    );
+
+=head1 REPOSITORY
+
+L<http://github.com/wjackson/async-util>
+
+=head1 AUTHORS
+
+Whitney Jackson

@@ -5,7 +5,7 @@ use List::MoreUtils qw(any);
 use AnyEvent;
 use Carp;
 
-use ok 'Async::Util', qw(apply apply_ignore apply_each chain);
+use ok 'Async::Util', qw(apply each chain);
 
 { # apply
     my $doubler = sub {
@@ -15,10 +15,6 @@ use ok 'Async::Util', qw(apply apply_ignore apply_each chain);
     };
 
     my $cv = AE::cv;
-
-    # apply( $doubler, [ 1..3 ], sub { $cv->send(@_) } );
-
-    # or
 
     apply(
         action => $doubler,
@@ -33,7 +29,7 @@ use ok 'Async::Util', qw(apply apply_ignore apply_each chain);
     is_deeply $doubled, [ 2, 4, 6 ], 'inputs doubled';
 }
 
-{ # apply_ignore
+{ # apply ( output = 0 )
     my @doubled;
 
     my $doubler = sub {
@@ -47,14 +43,11 @@ use ok 'Async::Util', qw(apply apply_ignore apply_each chain);
 
     my $cv = AE::cv;
 
-    # apply_ignore( $doubler, [ 1..3 ], sub { $cv->send(@_) } );
-
-    # or
-
-    apply_ignore(
+    apply(
         action => $doubler,
         inputs => [ 1..3 ],
         cb     => sub { $cv->send(@_) },
+        output => 0,
     );
 
     my (undef, $err) = $cv->recv;
@@ -66,7 +59,7 @@ use ok 'Async::Util', qw(apply apply_ignore apply_each chain);
     ok any( sub { $_ == 6 }, @doubled ), '3 was doubled';
 }
 
-{ # apply_each
+{ # each
     my $cv = AE::cv;
 
     my $subs = [
@@ -75,11 +68,7 @@ use ok 'Async::Util', qw(apply apply_ignore apply_each chain);
         sub { $_[1]->( $_[0] * 4, undef ) },
     ];
 
-    # apply_each( $subs, [ 1..3 ], sub { $cv->send(@_) } );
-
-    # or
-
-    apply_each(
+    each(
         actions => $subs,
         inputs  => [ 1..3 ],
         cb      => sub { $cv->send(@_) },
@@ -92,9 +81,7 @@ use ok 'Async::Util', qw(apply apply_ignore apply_each chain);
     is_deeply $results, [ 2, 6, 12 ], 'outputs look right';
 }
 
-{
-    # chain
-
+{ # chain
     my @timers;
     my $cv = AE::cv;
 
@@ -124,7 +111,6 @@ use ok 'Async::Util', qw(apply apply_ignore apply_each chain);
 
     my ($res) = $cv->recv;
     is $res, 6, 'chain result is 6';
-
 }
 
 done_testing;
