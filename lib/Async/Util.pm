@@ -2,6 +2,8 @@ package Async::Util;
 # ABSTRACT: utilities for doing common async operations
 use strict;
 use warnings;
+use v5.10;
+no warnings 'recursion';
 use Carp;
 use Exporter;
 use Scalar::Util qw(weaken);
@@ -85,6 +87,7 @@ sub _apply {
     };
 
     $run->();
+    weaken $run;
 
     return;
 }
@@ -144,6 +147,8 @@ sub _apply_ignore {
     };
 
     $run->();
+
+    weaken $after_work;
 
     return;
 }
@@ -215,6 +220,7 @@ sub each {
     };
 
     $run->();
+    weaken $run;
 
     return;
 }
@@ -226,11 +232,11 @@ sub chain {
     my $cb     = $args{cb};
     my $steps  = $args{steps};
 
-    croak q/Argument 'finished' is required/ if !defined $cb;
-    croak q/Argument 'steps' is required/    if !defined $steps;
+    croak q/Argument 'cb' is required/    if !defined $cb;
+    croak q/Argument 'steps' is required/ if !defined $steps;
 
-    croak q/Argument 'finished' must be a CodeRef/ if ref $cb ne 'CODE';
-    croak q/Argument 'steps' must be an ArrayRef/  if ref $steps ne 'ARRAY';
+    croak q/Argument 'cb' must be a CodeRef/      if ref $cb ne 'CODE';
+    croak q/Argument 'steps' must be an ArrayRef/ if ref $steps ne 'ARRAY';
 
     my $run; $run = sub {
         my ($result, $err) = @_;
@@ -262,7 +268,7 @@ Async::Util - Utilities for common asynchronous programming tasks.
 
 =head1 SYNOPSIS
 
-    use Async::Util qw(apply chain);
+    use Async::Util qw(apply each chain);
 
     # async map
     apply(
