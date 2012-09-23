@@ -5,9 +5,9 @@ use List::MoreUtils qw(any);
 use AnyEvent;
 use Carp;
 
-use ok 'Async::Util', qw(apply each chain);
+use ok 'Async::Util', qw(amap azipmap achain);
 
-{ # apply
+{ # amap
     my $doubler = sub {
         my ($input, $cb) = @_;
         my $err = undef;
@@ -16,7 +16,7 @@ use ok 'Async::Util', qw(apply each chain);
 
     my $cv = AE::cv;
 
-    apply(
+    amap(
         action => $doubler,
         inputs => [ 1..3 ],
         cb     => sub { $cv->send(@_) },
@@ -29,7 +29,7 @@ use ok 'Async::Util', qw(apply each chain);
     is_deeply $doubled, [ 2, 4, 6 ], 'inputs doubled';
 }
 
-{ # apply ( output = 0 )
+{ # amap ( output = 0 )
     my @doubled;
 
     my $doubler = sub {
@@ -43,7 +43,7 @@ use ok 'Async::Util', qw(apply each chain);
 
     my $cv = AE::cv;
 
-    apply(
+    amap(
         action => $doubler,
         inputs => [ 1..3 ],
         cb     => sub { $cv->send(@_) },
@@ -59,7 +59,7 @@ use ok 'Async::Util', qw(apply each chain);
     ok any( sub { $_ == 6 }, @doubled ), '3 was doubled';
 }
 
-{ # each
+{ # azipmap
     my $cv = AE::cv;
 
     my $subs = [
@@ -68,7 +68,7 @@ use ok 'Async::Util', qw(apply each chain);
         sub { $_[1]->( $_[0] * 4, undef ) },
     ];
 
-    each(
+    azipmap(
         actions => $subs,
         inputs  => [ 1..3 ],
         cb      => sub { $cv->send(@_) },
@@ -81,11 +81,11 @@ use ok 'Async::Util', qw(apply each chain);
     is_deeply $results, [ 2, 6, 12 ], 'outputs look right';
 }
 
-{ # chain
+{ # achain
     my @timers;
     my $cv = AE::cv;
 
-    chain(
+    achain(
         input => 2,
         steps => [
             sub {
@@ -110,7 +110,7 @@ use ok 'Async::Util', qw(apply each chain);
     );
 
     my ($res) = $cv->recv;
-    is $res, 6, 'chain result is 6';
+    is $res, 6, 'achain result is 6';
 }
 
 done_testing;
