@@ -1,4 +1,7 @@
 package Async::Util;
+BEGIN {
+    $Async::Util::VERSION = '0.01';
+}
 # ABSTRACT: utilities for doing common async operations
 use strict;
 use warnings;
