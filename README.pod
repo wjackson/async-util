@@ -15,7 +15,7 @@ Async::Util - Utilities for common asynchronous programming tasks
         cb     => \&do_this_at_the_end,
     );
 
-    # invoke action on the corresponding input
+    # invoke actions on the corresponding inputs
     azipmap(
         inputs  => [ 1, 1, 1 ],
         actions => [
@@ -36,7 +36,7 @@ Async::Util - Utilities for common asynchronous programming tasks
 Examples using AnyEvent:
 
     use AnyEvent;
-    use Async::Util qw(amap);
+    use Async::Util qw(amap achain);
 
     my @timers;
     my $delayed_double = sub {
@@ -129,7 +129,7 @@ invoked and passed the error. No more inputs are processed.
 C<azipmap> executes a list of callbacks on a list of corresponding inputs.
 Every provided action is executed and passed the input found in the same
 position in the list of provided inputs. In other words, the list of actions
-and the list of inputs are zipped in to action/input pairs, then each action
+and the list of inputs are zipped into action/input pairs, then each action
 is executed on its input.
 
     azipmap(
@@ -148,7 +148,7 @@ passes an error to its callback.
 =head2 achain
 
 C<achain> executes the provided steps in order. Each step's coderef is passed
-an input and a callback. When the step is complete is should invoke the
+an input and a callback. When the step is complete it should invoke the
 coderef and pass a result and an optional error. The result from each step
 becomes the input to the next step. The first step's input is the value passed
 to C<achain> as the C<input> argument. When all steps are complete the C<cb>
